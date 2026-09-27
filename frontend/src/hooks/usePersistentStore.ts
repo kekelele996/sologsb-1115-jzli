@@ -1,22 +1,23 @@
 import { useStore } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
 import Dexie, { type Table } from 'dexie'
-import type { CollectSite, Determination, Specimen, Storage } from '@/types'
+import type { CollectSite, Determination, Loan, Specimen, Storage } from '@/types'
 
 /** IndexedDB 数据结构版本号 */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export interface MetaRow {
   key: string
   value: number
 }
 
-/** Dexie 封装：标本 / 采集地 / 保藏位置 / 鉴定记录 四张业务表 + 元数据表 */
+/** Dexie 封装：标本 / 采集地 / 保藏位置 / 鉴定记录 / 外借记录 五张业务表 + 元数据表 */
 class InsectLogDb extends Dexie {
   specimens!: Table<Specimen, string>
   sites!: Table<CollectSite, string>
   storages!: Table<Storage, string>
   determinations!: Table<Determination, string>
+  loans!: Table<Loan, string>
   meta!: Table<MetaRow, string>
 
   constructor() {
@@ -29,7 +30,7 @@ class InsectLogDb extends Dexie {
       meta: 'key'
     })
     // v2：新增「采集方式」字段，迁移时为历史标本补齐默认采集方式（扫网）
-    this.version(SCHEMA_VERSION)
+    this.version(2)
       .stores({
         specimens: 'id, code, order, family, status, siteId, collectDate',
         sites: 'id, code, name, habitat',
@@ -47,6 +48,15 @@ class InsectLogDb extends Dexie {
             }
           })
       })
+    // v3：新增「外借记录」表，记录出借/归还全过程
+    this.version(SCHEMA_VERSION).stores({
+      specimens: 'id, code, order, family, status, siteId, collectDate',
+      sites: 'id, code, name, habitat',
+      storages: 'id, specimenId, cabinet, drawer',
+      determinations: 'id, specimenId, determiner, date',
+      loans: 'id, specimenId, borrower',
+      meta: 'key'
+    })
   }
 }
 
@@ -100,6 +110,7 @@ export async function seedDemoData(): Promise<void> {
   if (count > 0) return
 
   const today = new Date().toISOString().slice(0, 10)
+  const daysAgo = (n: number): string => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
 
   await db.sites.bulkPut([
     {
@@ -260,6 +271,29 @@ export async function seedDemoData(): Promise<void> {
       slot: 5,
       storedDate: today,
       handler: '覃羽'
+    }
+  ])
+
+  await db.loans.bulkPut([
+    {
+      id: 'loan_001',
+      specimenId: 'sp_002',
+      borrower: '陈默',
+      purpose: '夜蛾科形态比对（课题标本复核）',
+      loanDate: daysAgo(12),
+      dueDate: daysAgo(2),
+      returnDate: null,
+      returnHandler: ''
+    },
+    {
+      id: 'loan_002',
+      specimenId: 'sp_001',
+      borrower: '蓝澈',
+      purpose: '步甲科检索表编目拍照',
+      loanDate: daysAgo(30),
+      dueDate: daysAgo(16),
+      returnDate: daysAgo(18),
+      returnHandler: '覃羽'
     }
   ])
 }

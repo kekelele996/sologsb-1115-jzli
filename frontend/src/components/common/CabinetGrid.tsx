@@ -12,6 +12,8 @@ export interface CabinetGridProps {
   codeOf: (specimenId: string) => string
   /** 当前拖拽中的标本编号 */
   draggingCode: string | null
+  /** 判断标本是否在借（在借插位用琥珀色标出） */
+  isLoaned?: (specimenId: string) => boolean
   /** 点击或拖放到某个插位 */
   onDropSlot: (payload: { cabinet: string; drawer: number; box: number; slot: number }) => void
   onPickStorage?: (storage: Storage) => void
@@ -27,6 +29,7 @@ export default function CabinetGrid({
   storages,
   codeOf,
   draggingCode,
+  isLoaned,
   onDropSlot,
   onPickStorage,
   footer
@@ -61,11 +64,12 @@ export default function CabinetGrid({
                   {slotList.map((slot) => {
                     const storage = slotMap.get(encodeSlot(cabinet, drawer, box, slot))
                     const code = storage ? codeOf(storage.specimenId) : ''
+                    const loaned = storage ? (isLoaned?.(storage.specimenId) ?? false) : false
                     return (
                       <button
                         key={slot}
                         type="button"
-                        title={storage ? `占用：${code}` : '空位'}
+                        title={storage ? `${loaned ? '在借' : '占用'}：${code}` : '空位'}
                         onClick={() =>
                           storage && onPickStorage ? onPickStorage(storage) : onDropSlot({ cabinet, drawer, box, slot })
                         }
@@ -76,12 +80,14 @@ export default function CabinetGrid({
                         }}
                         className={`h-12 w-16 rounded-md border text-[11px] leading-tight transition ${
                           storage
-                            ? 'border-field-500 bg-field-50 text-field-700 hover:bg-field-100'
+                            ? loaned
+                              ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                              : 'border-field-500 bg-field-50 text-field-700 hover:bg-field-100'
                             : 'border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-field-500 hover:text-field-600'
                         }`}
                       >
                         <span className="block font-mono">{storage ? code : `S${String(slot).padStart(2, '0')}`}</span>
-                        <span className="block">{storage ? '占用' : '空位'}</span>
+                        <span className="block">{storage ? (loaned ? '在借' : '占用') : '空位'}</span>
                       </button>
                     )
                   })}

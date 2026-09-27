@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { DetStatus, Specimen } from '@/types'
+import type { DetStatus, Loan, Specimen } from '@/types'
 import { DET_STATUSES } from '@/types'
 import SpecimenCard from '@/components/common/SpecimenCard'
 import StatusTag from '@/components/common/StatusTag'
@@ -8,27 +8,54 @@ import { usePersistentStore } from '@/hooks/usePersistentStore'
 import { useSpecimenFilter } from '@/hooks/useSpecimenFilter'
 import { specimenStore } from '@/stores/specimenStore'
 import { siteStore } from '@/stores/siteStore'
+import { storageStore } from '@/stores/storageStore'
+import { loanStore } from '@/stores/loanStore'
 import { downloadCsv } from '@/utils/export'
 import { specimenTaxon } from '@/utils/codec'
+import { overdueDays } from '@/utils/loan'
+
+/** 保藏状态筛选：在柜 = 已入柜且未借出，在借 = 有未归还外借，未入柜 = 尚无柜位 */
+type StorageFilter = '' | '在柜' | '在借' | '未入柜'
+const STORAGE_FILTERS: StorageFilter[] = ['', '在柜', '在借', '未入柜']
 
 /** 标本清单：组合筛选 + 多选批量推进鉴定状态 */
 export default function SpecimensPage(): JSX.Element {
   const specimens = usePersistentStore(specimenStore, (state) => state.rows)
   const sites = usePersistentStore(siteStore, (state) => state.rows)
-  const { filter, setFilter, reset, filtered, hitCount, orders, families } = useSpecimenFilter(specimens)
+  const storages = usePersistentStore(storageStore, (state) => state.rows)
+  const loans = usePersistentStore(loanStore, (state) => state.rows)
+  const { filter, setFilter, reset, filtered, orders, families } = useSpecimenFilter(specimens)
+  const [storageFilter, setStorageFilter] = useState<StorageFilter>('')
   const [selected, setSelected] = useState<string[]>([])
   const [batchStatus, setBatchStatus] = useState<DetStatus>('初鉴')
   const [message, setMessage] = useState('')
 
   const siteMap = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites])
   const selectedSet = useMemo(() => new Set(selected), [selected])
+  const placedIds = useMemo(() => new Set(storages.map((item) => item.specimenId)), [storages])
+  /** 在借（未归还）记录：specimenId → Loan */
+  const activeLoanBySpecimen = useMemo(() => {
+    const map = new Map<string, Loan>()
+    loans.forEach((loan) => {
+      if (!loan.returnDate) map.set(loan.specimenId, loan)
+    })
+    return map
+  }, [loans])
+
+  const storageStateOf = (specimenId: string): '在柜' | '在借' | '未入柜' => {
+    if (activeLoanBySpecimen.has(specimenId)) return '在借'
+    return placedIds.has(specimenId) ? '在柜' : '未入柜'
+  }
+
+  /** 在组合筛选结果上再按保藏状态过滤 */
+  const view = storageFilter ? filtered.filter((item) => storageStateOf(item.id) === storageFilter) : filtered
 
   const toggle = (id: string): void => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))
   }
 
   const toggleAll = (): void => {
-    setSelected((prev) => (prev.length === filtered.length ? [] : filtered.map((item) => item.id)))
+    setSelected((prev) => (prev.length === view.length ? [] : view.map((item) => item.id)))
   }
 
   const applyBatch = async (): Promise<void> => {
@@ -42,7 +69,7 @@ export default function SpecimensPage(): JSX.Element {
   }
 
   const exportList = (): void => {
-    const rows = filtered.map((item: Specimen) => ({
+    const rows = view.map((item: Specimen) => ({
       code: item.code,
       taxon: specimenTaxon(item),
       site: siteMap.get(item.siteId)?.name ?? '',
@@ -50,7 +77,8 @@ export default function SpecimensPage(): JSX.Element {
       method: item.method,
       quantity: item.quantity,
       status: item.status,
-      determiner: item.determiner
+      determiner: item.determiner,
+      storageState: storageStateOf(item.id)
     }))
     downloadCsv('标本清单.csv', rows as unknown as Record<string, unknown>[], [
       { key: 'code', label: '标本编号' },
@@ -60,7 +88,8 @@ export default function SpecimensPage(): JSX.Element {
       { key: 'method', label: '采集方式' },
       { key: 'quantity', label: '数量' },
       { key: 'status', label: '鉴定状态' },
-      { key: 'determiner', label: '鉴定人' }
+      { key: 'determiner', label: '鉴定人' },
+      { key: 'storageState', label: '保藏状态' }
     ])
   }
 
@@ -72,7 +101,7 @@ export default function SpecimensPage(): JSX.Element {
         <div>
           <h1 className="page-title">标本清单</h1>
           <p className="page-sub">
-            按目/科、鉴定状态与采集日期区间筛选，多选后可批量推进鉴定状态；编号规则为「采集地代码-年份-流水号」。
+            按目/科、鉴定状态、保藏状态（在柜/在借）与采集日期区间筛选，多选后可批量推进鉴定状态；编号规则为「采集地代码-年份-流水号」。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -143,6 +172,20 @@ export default function SpecimensPage(): JSX.Element {
           </select>
         </div>
         <div>
+          <span className="field-label">保藏状态</span>
+          <select
+            className="field-input w-32"
+            value={storageFilter}
+            onChange={(e) => setStorageFilter(e.target.value as StorageFilter)}
+          >
+            {STORAGE_FILTERS.map((item) => (
+              <option key={item} value={item}>
+                {item || '全部'}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <span className="field-label">采集日期起</span>
           <input
             type="date"
@@ -169,17 +212,25 @@ export default function SpecimensPage(): JSX.Element {
             onChange={(e) => setFilter({ keyword: e.target.value })}
           />
         </div>
-        <button className="btn-ghost" type="button" onClick={reset}>
+        <button
+          className="btn-ghost"
+          type="button"
+          onClick={() => {
+            reset()
+            setStorageFilter('')
+          }}
+        >
           重置
         </button>
       </section>
 
       <section className="panel flex flex-wrap items-center gap-3">
         <button className="btn-ghost" type="button" onClick={toggleAll}>
-          {selected.length === filtered.length && filtered.length > 0 ? '取消全选' : '全选命中'}
+          {selected.length === view.length && view.length > 0 ? '取消全选' : '全选命中'}
         </button>
         <span className="text-sm text-slate-600">
-          命中 <b data-testid="hit-count">{hitCount}</b> / {specimens.length} 份，已选 {selected.length} 份
+          命中 <b data-testid="hit-count">{view.length}</b> / {specimens.length} 份{storageFilter ? `（${storageFilter}）` : ''}
+          ，已选 {selected.length} 份
         </span>
         <select
           className="field-input w-32"
@@ -206,27 +257,44 @@ export default function SpecimensPage(): JSX.Element {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((specimen) => (
-          <SpecimenCard
-            key={specimen.id}
-            specimen={specimen}
-            site={siteMap.get(specimen.siteId)}
-            selectable
-            selected={selectedSet.has(specimen.id)}
-            onToggle={toggle}
-            footer={
-              <>
-                <Link className="btn-ghost" to="/determination">
-                  去鉴定
-                </Link>
-                <Link className="btn-ghost" to="/storage">
-                  去入柜
-                </Link>
-              </>
-            }
-          />
-        ))}
-        {filtered.length === 0 ? (
+        {view.map((specimen) => {
+          const loan = activeLoanBySpecimen.get(specimen.id)
+          const overdue = loan ? overdueDays(loan.dueDate) : 0
+          return (
+            <SpecimenCard
+              key={specimen.id}
+              specimen={specimen}
+              site={siteMap.get(specimen.siteId)}
+              selectable
+              selected={selectedSet.has(specimen.id)}
+              onToggle={toggle}
+              footer={
+                <>
+                  {loan ? (
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs leading-5 ${
+                        overdue > 0
+                          ? 'border-rose-300 bg-rose-50 text-rose-600'
+                          : 'border-amber-300 bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {overdue > 0
+                        ? `在借 · 应还 ${loan.dueDate} · 已逾期 ${overdue} 天`
+                        : `在借 · 应还 ${loan.dueDate}`}
+                    </span>
+                  ) : null}
+                  <Link className="btn-ghost" to="/determination">
+                    去鉴定
+                  </Link>
+                  <Link className="btn-ghost" to="/storage">
+                    去入柜
+                  </Link>
+                </>
+              }
+            />
+          )
+        })}
+        {view.length === 0 ? (
           <p className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-400">
             没有命中的标本，调整筛选条件或去「采集登记」新增
           </p>

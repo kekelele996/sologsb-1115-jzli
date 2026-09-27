@@ -4,13 +4,14 @@ import { specimenStore } from '@/stores/specimenStore'
 import { siteStore } from '@/stores/siteStore'
 import { storageStore } from '@/stores/storageStore'
 import { determinationStore } from '@/stores/determinationStore'
+import { loanStore } from '@/stores/loanStore'
 
 const NAV = [
   { to: '/specimens', label: '标本清单', hint: '筛选 / 批量推进' },
   { to: '/collect', label: '采集登记', hint: '同批次多份录入' },
   { to: '/sites', label: '采集地管理', hint: '坐标校验 / 合并' },
   { to: '/determination', label: '鉴定工作流', hint: '待鉴定队列' },
-  { to: '/storage', label: '保藏柜位图', hint: '柜-屉-盒-位' }
+  { to: '/storage', label: '保藏柜位图', hint: '柜-屉-盒-位 / 外借' }
 ]
 
 /** 应用外壳：左侧导航 + 顶部状态条 + 路由出口 */
@@ -19,8 +20,10 @@ export default function AppLayout(): JSX.Element {
   const sites = usePersistentStore(siteStore, (state) => state.rows)
   const storages = usePersistentStore(storageStore, (state) => state.rows)
   const determinations = usePersistentStore(determinationStore, (state) => state.rows)
+  const loans = usePersistentStore(loanStore, (state) => state.rows)
 
   const pending = specimens.filter((item) => item.status === '待鉴定').length
+  const onLoan = loans.filter((item) => !item.returnDate).length
 
   return (
     <div className="flex min-h-screen">
@@ -66,6 +69,10 @@ export default function AppLayout(): JSX.Element {
           <div className="flex justify-between">
             <dt>已入柜</dt>
             <dd className="font-semibold">{storages.length}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>在借</dt>
+            <dd className="font-semibold">{onLoan}</dd>
           </div>
           <div className="flex justify-between">
             <dt>鉴定记录</dt>
