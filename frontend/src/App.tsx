@@ -1,9 +1,12 @@
+import { useMemo } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { usePersistentStore } from '@/hooks/usePersistentStore'
 import { specimenStore } from '@/stores/specimenStore'
 import { siteStore } from '@/stores/siteStore'
 import { storageStore } from '@/stores/storageStore'
+import { loanStore } from '@/stores/loanStore'
 import { determinationStore } from '@/stores/determinationStore'
+import { buildStorageStateIndex } from '@/utils/loan'
 
 const NAV = [
   { to: '/specimens', label: '标本清单', hint: '筛选 / 批量推进' },
@@ -18,9 +21,11 @@ export default function AppLayout(): JSX.Element {
   const specimens = usePersistentStore(specimenStore, (state) => state.rows)
   const sites = usePersistentStore(siteStore, (state) => state.rows)
   const storages = usePersistentStore(storageStore, (state) => state.rows)
+  const loans = usePersistentStore(loanStore, (state) => state.rows)
   const determinations = usePersistentStore(determinationStore, (state) => state.rows)
 
   const pending = specimens.filter((item) => item.status === '待鉴定').length
+  const storageIndex = useMemo(() => buildStorageStateIndex(storages, loans), [storages, loans])
 
   return (
     <div className="flex min-h-screen">
@@ -65,7 +70,13 @@ export default function AppLayout(): JSX.Element {
           </div>
           <div className="flex justify-between">
             <dt>已入柜</dt>
-            <dd className="font-semibold">{storages.length}</dd>
+            <dd className="font-semibold">
+              {storages.length}
+              <span className="text-field-100/70">
+                （在借 {storageIndex.onLoan}
+                {storageIndex.overdue > 0 ? `，逾期 ${storageIndex.overdue}` : ''}）
+              </span>
+            </dd>
           </div>
           <div className="flex justify-between">
             <dt>鉴定记录</dt>

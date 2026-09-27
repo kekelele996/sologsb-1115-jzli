@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react'
-import type { DetStatus, Specimen } from '@/types'
+import type { DetStatus, Specimen, StorageState } from '@/types'
+import type { StorageStateIndex } from '@/utils/loan'
+import { storageStateOf } from '@/utils/loan'
 
 export interface SpecimenFilterState {
   order: string
   family: string
   status: DetStatus | ''
+  storageState: StorageState | ''
   siteId: string
   dateFrom: string
   dateTo: string
@@ -15,6 +18,7 @@ export const EMPTY_FILTER: SpecimenFilterState = {
   order: '',
   family: '',
   status: '',
+  storageState: '',
   siteId: '',
   dateFrom: '',
   dateTo: '',
@@ -22,7 +26,10 @@ export const EMPTY_FILTER: SpecimenFilterState = {
 }
 
 /** 组合筛选条件，返回过滤结果、命中数与可选的目/科候选 */
-export function useSpecimenFilter(specimens: Specimen[]): {
+export function useSpecimenFilter(
+  specimens: Specimen[],
+  storageIndex?: StorageStateIndex | null
+): {
   filter: SpecimenFilterState
   setFilter: (patch: Partial<SpecimenFilterState>) => void
   reset: () => void
@@ -53,6 +60,7 @@ export function useSpecimenFilter(specimens: Specimen[]): {
       if (filter.order && item.order !== filter.order) return false
       if (filter.family && item.family !== filter.family) return false
       if (filter.status && item.status !== filter.status) return false
+      if (filter.storageState && storageStateOf(storageIndex ?? null, item.id) !== filter.storageState) return false
       if (filter.siteId && item.siteId !== filter.siteId) return false
       if (filter.dateFrom && item.collectDate < filter.dateFrom) return false
       if (filter.dateTo && item.collectDate > filter.dateTo) return false
@@ -73,7 +81,7 @@ export function useSpecimenFilter(specimens: Specimen[]): {
       }
       return true
     })
-  }, [specimens, filter])
+  }, [specimens, filter, storageIndex])
 
   return { filter, setFilter, reset, filtered, hitCount: filtered.length, orders, families }
 }

@@ -12,6 +12,10 @@ export interface CabinetGridProps {
   codeOf: (specimenId: string) => string
   /** 当前拖拽中的标本编号 */
   draggingCode: string | null
+  /** 在借中的标本（插位保留但锁定） */
+  onLoanIds?: ReadonlySet<string>
+  /** 在借且已逾期的标本 */
+  overdueIds?: ReadonlySet<string>
   /** 点击或拖放到某个插位 */
   onDropSlot: (payload: { cabinet: string; drawer: number; box: number; slot: number }) => void
   onPickStorage?: (storage: Storage) => void
@@ -27,6 +31,8 @@ export default function CabinetGrid({
   storages,
   codeOf,
   draggingCode,
+  onLoanIds,
+  overdueIds,
   onDropSlot,
   onPickStorage,
   footer
@@ -61,11 +67,17 @@ export default function CabinetGrid({
                   {slotList.map((slot) => {
                     const storage = slotMap.get(encodeSlot(cabinet, drawer, box, slot))
                     const code = storage ? codeOf(storage.specimenId) : ''
+                    const onLoan = storage ? onLoanIds?.has(storage.specimenId) ?? false : false
+                    const overdue = storage ? overdueIds?.has(storage.specimenId) ?? false : false
                     return (
                       <button
                         key={slot}
                         type="button"
-                        title={storage ? `占用：${code}` : '空位'}
+                        title={
+                          storage
+                            ? `占用：${code}${onLoan ? `（在借${overdue ? '·已逾期' : ''}，柜位锁定）` : ''}`
+                            : '空位'
+                        }
                         onClick={() =>
                           storage && onPickStorage ? onPickStorage(storage) : onDropSlot({ cabinet, drawer, box, slot })
                         }
@@ -76,12 +88,16 @@ export default function CabinetGrid({
                         }}
                         className={`h-12 w-16 rounded-md border text-[11px] leading-tight transition ${
                           storage
-                            ? 'border-field-500 bg-field-50 text-field-700 hover:bg-field-100'
+                            ? onLoan
+                              ? overdue
+                                ? 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                : 'border-sky-400 bg-sky-50 text-sky-700 hover:bg-sky-100'
+                              : 'border-field-500 bg-field-50 text-field-700 hover:bg-field-100'
                             : 'border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-field-500 hover:text-field-600'
                         }`}
                       >
                         <span className="block font-mono">{storage ? code : `S${String(slot).padStart(2, '0')}`}</span>
-                        <span className="block">{storage ? '占用' : '空位'}</span>
+                        <span className="block">{storage ? (onLoan ? '在借' : '占用') : '空位'}</span>
                       </button>
                     )
                   })}

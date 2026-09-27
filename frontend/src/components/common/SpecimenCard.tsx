@@ -12,6 +12,8 @@ export interface SpecimenCardProps {
   selectable?: boolean
   onToggle?: (id: string) => void
   onOpen?: (specimen: Specimen) => void
+  /** 头部状态标签旁的附加标记（如保藏状态） */
+  badge?: ReactNode
   /** 卡片底部自定义操作区 */
   footer?: ReactNode
 }
@@ -24,6 +26,7 @@ export default function SpecimenCard({
   selectable = false,
   onToggle,
   onOpen,
+  badge,
   footer
 }: SpecimenCardProps): JSX.Element {
   return (
@@ -60,7 +63,10 @@ export default function SpecimenCard({
             </p>
           </div>
         </div>
-        <StatusTag status={specimen.status} />
+        <div className="flex shrink-0 items-start gap-1.5">
+          {badge}
+          <StatusTag status={specimen.status} />
+        </div>
       </header>
       <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
         <div>

@@ -6,6 +6,7 @@ import { seedDemoData, stampDbVersion } from '@/hooks/usePersistentStore'
 import { specimenStore } from '@/stores/specimenStore'
 import { siteStore } from '@/stores/siteStore'
 import { storageStore } from '@/stores/storageStore'
+import { loanStore } from '@/stores/loanStore'
 import { determinationStore } from '@/stores/determinationStore'
 import '@/styles/index.css'
 
@@ -16,6 +17,7 @@ async function bootstrap(): Promise<void> {
   await siteStore.getState().hydrate()
   await specimenStore.getState().hydrate()
   await storageStore.getState().hydrate()
+  await loanStore.getState().hydrate()
   await determinationStore.getState().hydrate()
 }
 
